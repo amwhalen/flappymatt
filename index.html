@@ -1,0 +1,301 @@
+<html>
+<head>
+<meta name="viewport" content="width=574, user-scalable=no">
+<title>Flappy</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+<script src="gamequery.js"></script>
+<script type="text/javascript">
+
+// global constants
+var PLAYGROUND_WIDTH  = 574;
+var PLAYGROUND_HEIGHT = 574;
+var REFRESH_RATE      = 30;
+var gameOver          = false;
+var smallStarSpeed    = 1; // pixels per frame    
+var mediumStarSpeed   = 3; // pixels per frame
+var bigStarSpeed      = 6; // pixels per frame
+var fallingSpeed      = 8; // pixels per frame
+var playerWidth       = 36;    
+var playerHeight      = 53;
+var groundHeight      = 20;
+var playerX           = 80;
+var score             = 0;
+var pipeWidth         = 92;
+var clickEventTrigger = (('ontouchend' in window) || (window.DocumentTouch && document instanceof DocumentTouch)) ? 'touchend' : 'click';
+var isFlying          = false;
+var flyingSpeed       = 10; // pixels per frame
+var flyingCounter     = 0;
+var spaceBetweenPipes = (playerHeight * 3.5);
+
+$(function(){
+
+    function logScore() {
+        var data = {"score": score};
+        $.post('log.php', data);
+    }
+
+	function restartGame() {
+    	window.location.reload();
+    };
+
+    function setGameOver() {
+    	gameOver = true;
+    	$.playground().pauseGame();
+		$('#playground').html('<div id="gameover" class="screen"><p>Game Over :(<br>Your score: '+score+'<br>Click to play again</p></div>');
+        $('#gameover').bind(clickEventTrigger, restartGame);
+        logScore();
+    }
+
+    function addToScore() {
+        score += 1;
+        $("#score").html(score);
+    }
+
+	// backgrounds
+    var smallclouds = new $.gameQuery.Animation({imageURL: "cloudssmall.png"});
+    var smallclouds2 = new $.gameQuery.Animation({imageURL: "cloudssmall2.png"});
+    var player = new $.gameQuery.Animation({imageURL: "matt.png"});
+    var pipe = new $.gameQuery.Animation({imageURL: "gansett.png"});
+    var pipeTop = new $.gameQuery.Animation({imageURL: "gansett_top.png"});
+    var ground = new $.gameQuery.Animation({imageURL: "ground.png"});
+    var bigclouds = new $.gameQuery.Animation({imageURL: "clouds_large.png"});
+    var bigclouds2 = new $.gameQuery.Animation({imageURL: "clouds_large2.png"});
+
+    // Initialize the game:
+    $("#playground").playground({ width: PLAYGROUND_WIDTH, height: PLAYGROUND_HEIGHT, keyTracker: true});
+
+    // Initialize the background
+    $.playground()
+        .addGroup("background", {width: PLAYGROUND_WIDTH, 
+                                 height: PLAYGROUND_HEIGHT})
+        .addSprite("background-smallclouds", {animation: smallclouds, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT})
+        .addSprite("background-smallclouds2", {animation: smallclouds2, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT,
+                               	   posx: PLAYGROUND_WIDTH})
+        .addSprite("background-bigclouds", {animation: bigclouds, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT})
+        .addSprite("background-bigclouds2", {animation: bigclouds2, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT,
+                                   posx: PLAYGROUND_WIDTH})
+        .addSprite("background-ground", {animation: ground, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT})
+        .addSprite("background-ground2", {animation: ground, 
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT,
+                                   posx: PLAYGROUND_WIDTH});
+
+    // add player
+    $.playground().addGroup("actors", {width: PLAYGROUND_WIDTH, height: PLAYGROUND_HEIGHT})
+            .addGroup("player", { posx: playerX, posy: playerHeight, width: playerWidth, height: playerHeight })
+            .addSprite("playerBody", { animation: player, posx: 0, posy: 0, width: playerWidth, height: playerHeight });
+
+    // score
+    $.playground().addGroup("overlay", {width: PLAYGROUND_WIDTH, height: 100});
+
+    // update backgrounds and player
+    $.playground().registerCallback(function(){
+		
+    	if (!gameOver) {
+
+    		// move the background
+			var newPos = (parseInt($("#background-smallclouds").x()) - smallStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+			$("#background-smallclouds").x(newPos);
+			var newPos = (parseInt($("#background-smallclouds2").x()) - smallStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+			$("#background-smallclouds2").x(newPos);
+
+            // move the large clouds
+            var newPos = (parseInt($("#background-bigclouds").x()) - mediumStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+            $("#background-bigclouds").x(newPos);
+            var newPos = (parseInt($("#background-bigclouds2").x()) - mediumStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+            $("#background-bigclouds2").x(newPos);
+
+            // move the ground
+            var newPos = (parseInt($("#background-ground").x()) - bigStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+            $("#background-ground").x(newPos);
+            var newPos = (parseInt($("#background-ground2").x()) - bigStarSpeed - PLAYGROUND_WIDTH) % (-2 * PLAYGROUND_WIDTH) + PLAYGROUND_WIDTH;
+            $("#background-ground2").x(newPos);
+			
+			// falling player
+			var playerY = $("#player").y();
+            if (playerY+playerHeight >= PLAYGROUND_HEIGHT-groundHeight) {
+				//console.log('player hit bottom');
+                setGameOver();
+				return;
+            } else if (playerY < 0) {
+                //console.log('player hit top');
+                setGameOver();
+                return;
+			} else {
+                var newPlayerY;
+                if (flyingCounter > 0) {
+                    // fly!
+                    newPlayerY = (parseInt($("#player").y()) - flyingSpeed) % PLAYGROUND_HEIGHT;
+                    flyingCounter -= 1;
+                } else {
+                    // fall!
+                    newPlayerY = (parseInt($("#player").y()) + fallingSpeed) % PLAYGROUND_HEIGHT;
+                }
+                $("#player").y(newPlayerY);
+			}
+
+            // update pipe movement
+			$(".pipe").each(function() {
+
+				// what's the current position?
+				var posx = parseInt($(this).x());
+
+				// move this pipe left on the screen
+				newPos = posx - bigStarSpeed;
+				$(this).x(newPos);
+
+				// can't see it anymore? remove it and add it to the score
+				if ((newPos + 92) < 0) {
+                    // don't double count
+                    if ($(this).hasClass('pipeTop')) {
+                        addToScore();
+                    }
+					$(this).remove();
+					return;
+				}
+
+				// test for collisions
+				var collided = $(this).collision("#playerBody,#player,#actors");
+				if (collided.size() > 0) {					
+					// The player has been hit!
+					setGameOver();
+					return;
+				}
+			});
+
+    	}
+
+	}, REFRESH_RATE);
+
+	// create random pipes
+    $.playground().registerCallback(function(){
+
+      if (!gameOver){
+        if (Math.random() < 0.6) {
+          
+            maxPipeHeight = PLAYGROUND_HEIGHT - groundHeight - spaceBetweenPipes;
+            minPipeHeight = 75;
+            var maxAdditionalHeight = maxPipeHeight - minPipeHeight;
+            var randomHeight = Math.ceil(Math.random()*maxAdditionalHeight);
+            var pipeHeight = minPipeHeight + randomHeight;
+            var pipeY = PLAYGROUND_HEIGHT - groundHeight - pipeHeight;
+
+            var pipeTopHeight = pipeY - spaceBetweenPipes;
+
+            // bottom pipe
+            var name = "pipe_"+Math.ceil(Math.random()*1000);
+            $("#actors").addSprite(name, {animation: pipe, 
+                posx: PLAYGROUND_WIDTH, posy: pipeY,
+                width: pipeWidth, height: pipeHeight});
+            
+            // add top pipe
+            var nameTop = name + "_top";
+            pipeTopY = 0 - (PLAYGROUND_HEIGHT - pipeTopHeight);
+            $("#actors").addSprite(nameTop, {animation: pipeTop,
+                posx: PLAYGROUND_WIDTH, posy: pipeTopY,
+                width: pipeWidth, height: PLAYGROUND_HEIGHT});
+
+            // add css classes to get a hold of all pipes at once
+            $("#"+name).addClass("pipe");
+            $("#"+nameTop).addClass("pipe");
+            $("#"+nameTop).addClass("pipeTop");
+
+        } else {
+        	// no pipe added right now
+        }
+      }
+      
+    }, 1500); // in milliseconds
+
+    // move player on tap/click
+    function movePlayer(e){
+        e.preventDefault();
+        if (gameOver) return;
+    	// move player up a little
+    	//$("#player").y($("#player").y()-playerHeight);
+        isFlying = true;
+        flyingCounter = 4;
+    }
+    $(document).bind(clickEventTrigger, movePlayer);
+
+    // keyboard control with 'w'
+    function movePlayerWithKeyboard(e) {
+        // 'w'
+        if (e.keyCode == 87) {
+            movePlayer(e);
+        }
+    }
+    $(document).bind('keyup', movePlayerWithKeyboard);
+
+    // start game button
+    $('#welcome').bind(clickEventTrigger, function(){
+		$.playground().startGame(function(){
+            $('#welcome').hide();
+            $('#overlay').append('<div id="score">0</div>');
+	    });
+	});
+
+});
+</script>
+<style type="text/css">
+body {
+    background: #eee;
+    font-family: Helvetica, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+#game {
+    margin: 0 auto;
+    width: 574px;
+}
+#playground {
+    width: 574px;
+    height: 574px;
+    background: #00C6FF;
+}
+.screen {
+    width: 100%;
+    height: 100%;
+    display: table;
+}
+.screen:hover {
+    cursor: pointer;
+}
+.screen p {
+    display: table-cell;
+    text-align: center;
+    vertical-align: middle;
+    color: #fff;
+    font-size: 2em;
+}
+#score {
+    width: 100%;
+    height: 4em;
+    text-align: right;
+    position: absolute;
+    top: 0;
+    right: 10px;
+    font-weight: bold;
+    font-size: 4em;
+    z-index: 9999;
+}
+</style>
+</head>
+<body>
+    <div id="game">
+	   <div id="playground">
+            <div id="welcome" class="screen"><p><img src="matt.png" /><br><br>Flappy Matt<br><br>Click, tap, or press 'w' to fly!<br><br>(click or tap anywhere to begin)</p></div>
+        </div>
+    </div>
+</body>
+</html>
