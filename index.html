@@ -26,6 +26,8 @@ var isFlying          = false;
 var flyingSpeed       = 10; // pixels per frame
 var flyingCounter     = 0;
 var spaceBetweenPipes = (playerHeight * 3.5);
+var isPaused          = false;
+var version           = '1.1';
 
 $(function(){
 
@@ -52,14 +54,19 @@ $(function(){
     }
 
 	// backgrounds
-    var smallclouds = new $.gameQuery.Animation({imageURL: "cloudssmall.png"});
-    var smallclouds2 = new $.gameQuery.Animation({imageURL: "cloudssmall2.png"});
-    var player = new $.gameQuery.Animation({imageURL: "matt.png"});
-    var pipe = new $.gameQuery.Animation({imageURL: "gansett.png"});
-    var pipeTop = new $.gameQuery.Animation({imageURL: "gansett_top.png"});
-    var ground = new $.gameQuery.Animation({imageURL: "ground.png"});
-    var bigclouds = new $.gameQuery.Animation({imageURL: "clouds_large.png"});
-    var bigclouds2 = new $.gameQuery.Animation({imageURL: "clouds_large2.png"});
+    var smallclouds = new $.gameQuery.Animation({imageURL: "cloudssmall.png?v="+version});
+    var smallclouds2 = new $.gameQuery.Animation({imageURL: "cloudssmall2.png?v="+version});
+    var player = new $.gameQuery.Animation({imageURL: "matt.png?v="+version});
+    var matt = new $.gameQuery.Animation({imageURL: "matt_animated.png?v="+version,
+        numberOfFrame: 2,
+        delta: 36,
+        rate: 90,
+        type: $.gameQuery.ANIMATION_HORIZONTAL});
+    var pipe = new $.gameQuery.Animation({imageURL: "gansett.png?v="+version});
+    var pipeTop = new $.gameQuery.Animation({imageURL: "gansett_top.png?v="+version});
+    var ground = new $.gameQuery.Animation({imageURL: "ground.png?v="+version});
+    var bigclouds = new $.gameQuery.Animation({imageURL: "clouds_large.png?v="+version});
+    var bigclouds2 = new $.gameQuery.Animation({imageURL: "clouds_large2.png?v="+version});
 
     // Initialize the game:
     $("#playground").playground({ width: PLAYGROUND_WIDTH, height: PLAYGROUND_HEIGHT, keyTracker: true});
@@ -82,13 +89,15 @@ $(function(){
                                    width: PLAYGROUND_WIDTH, 
                                    height: PLAYGROUND_HEIGHT,
                                    posx: PLAYGROUND_WIDTH})
-        .addSprite("background-ground", {animation: ground, 
-                                   width: PLAYGROUND_WIDTH, 
-                                   height: PLAYGROUND_HEIGHT})
-        .addSprite("background-ground2", {animation: ground, 
+        .addSprite("background-ground", {animation: ground,
                                    width: PLAYGROUND_WIDTH, 
                                    height: PLAYGROUND_HEIGHT,
-                                   posx: PLAYGROUND_WIDTH});
+                                   posy: (PLAYGROUND_HEIGHT-groundHeight)})
+        .addSprite("background-ground2", {animation: ground,
+                                   width: PLAYGROUND_WIDTH, 
+                                   height: PLAYGROUND_HEIGHT,
+                                   posx: PLAYGROUND_WIDTH,
+                                   posy: (PLAYGROUND_HEIGHT-groundHeight)});
 
     // add player
     $.playground().addGroup("actors", {width: PLAYGROUND_WIDTH, height: PLAYGROUND_HEIGHT})
@@ -155,7 +164,7 @@ $(function(){
 				$(this).x(newPos);
 
 				// can't see it anymore? remove it and add it to the score
-				if ((newPos + 92) < 0) {
+				if ((newPos + pipeWidth) < 0) {
                     // don't double count
                     if ($(this).hasClass('pipeTop')) {
                         addToScore();
@@ -164,12 +173,14 @@ $(function(){
 					return;
 				}
 
-				// test for collisions
-				var collided = $(this).collision("#playerBody,#player,#actors");
-				if (collided.size() > 0) {					
-					// The player has been hit!
-					setGameOver();
-					return;
+				// test for collisions (only when a pipe is near the player)
+				if (newPos <= (playerX+playerWidth)) {
+					var collided = $(this).collision("#playerBody,#player,#actors");
+					if (collided.size() > 0) {					
+						// The player has been hit!
+						setGameOver();
+						return;
+					}
 				}
 			});
 
@@ -237,11 +248,25 @@ $(function(){
     }
     $(document).bind('keyup', movePlayerWithKeyboard);
 
+    // pause button
+    function pauseGame(e){
+        e.preventDefault();
+        if (isPaused) {
+        	$.playground().resumeGame();
+        	isPaused = false;
+        } else {
+        	$.playground().pauseGame();
+        	isPaused = true;
+        }
+    }
+
     // start game button
     $('#welcome').bind(clickEventTrigger, function(){
 		$.playground().startGame(function(){
             $('#welcome').hide();
             $('#overlay').append('<div id="score">0</div>');
+            //$('#overlay').append('<div id="pause">pause</div>');
+            //$('#pause').bind(clickEventTrigger, pauseGame);
 	    });
 	});
 
@@ -279,7 +304,7 @@ body {
     font-size: 2em;
 }
 #score {
-    width: 100%;
+    width: 50%;
     height: 4em;
     text-align: right;
     position: absolute;
@@ -288,6 +313,20 @@ body {
     font-weight: bold;
     font-size: 4em;
     z-index: 9999;
+}
+#pause {
+	width: 50px;
+	height: 50px;
+	padding: 10px;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-weight: bold;
+    font-size: 2em;
+    z-index: 9999;
+    background: #000;
+    color: #fff;
+    cursor: pointer;
 }
 </style>
 </head>
